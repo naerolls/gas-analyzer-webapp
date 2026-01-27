@@ -1,12 +1,26 @@
-=== GAS TURBINE FUEL ANALYSIS TOOL ===
+"""
+Gas Turbine Fuel Analyzer - Web App with Google Sheets Integration
+Streamlit app that saves analyses to Google Sheets
 
-INSTRUCTIONS:
-1. Enter mol% for each component in Column B (User Input) OR
-2. Use Pipeline Spec values shown below for quick calculations
-3. Calculated properties appear in the RESULTS section below
-4. Total mol% must equal 100%
-5. Results shown in both SI and US units
+Installation:
+pip install streamlit pandas openpyxl gspread oauth2client google-auth
 
+Setup Google Sheets:
+1. Go to https://console.cloud.google.com/
+2. Create new project
+3. Enable Google Sheets API
+4. Create Service Account
+5. Download JSON key file (save as 'credentials.json')
+6. Share your Google Sheet with the service account email
+
+Usage:
+streamlit run gas_analyzer_webapp.py
+
+Deploy to Streamlit Cloud:
+1. Push to GitHub
+2. Add credentials.json to Streamlit secrets
+3. Deploy from share.streamlit.io
+"""
 ---COMPONENT DATABASE---
 Component | Mol% Input | Mol Weight | LHV (MJ/kg) | HHV (MJ/kg) | Sp. Gravity
           |     (B)    |    (C)     |     (D)     |     (E)     |     (F)
