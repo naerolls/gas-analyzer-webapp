@@ -222,10 +222,18 @@ with tabs[0]:
     
     st.markdown("### Gas Composition")
     
-    preset = st.selectbox("Load Preset", ["Custom"] + list(PRESETS.keys()))
+    col_preset1, col_preset2 = st.columns([3, 1])
+    with col_preset1:
+        preset = st.selectbox("Load Preset", ["Custom"] + list(PRESETS.keys()), key="preset_select")
+    with col_preset2:
+        if st.button("Load", disabled=(preset == "Custom")):
+            for name in COMPONENTS.keys():
+                st.session_state.composition[name] = PRESETS[preset].get(name, 0.0)
+            st.rerun()
     
-    if preset != "Custom" and st.button("Load Preset"):
-        st.session_state.composition = PRESETS[preset].copy()
+    if st.button("Clear All", key="clear_btn"):
+        for name in COMPONENTS.keys():
+            st.session_state.composition[name] = 0.0
         st.rerun()
     
     st.markdown("**Enter mol% for each component:**")
@@ -245,6 +253,7 @@ with tabs[0]:
                 max_value=100.0,
                 value=float(default),
                 step=0.1,
+                format="%.2f",
                 key=f"inp_{name}"
             )
     
@@ -257,6 +266,7 @@ with tabs[0]:
                 max_value=100.0,
                 value=float(default),
                 step=0.1,
+                format="%.2f",
                 key=f"inp_{name}"
             )
     
