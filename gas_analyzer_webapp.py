@@ -111,8 +111,23 @@ if 'use_si' not in st.session_state:
     st.session_state.use_si = True
 if 'limits' not in st.session_state:
     st.session_state.limits = DEFAULT_LIMITS.copy()
-if 'preset_loaded' not in st.session_state:
-    st.session_state.preset_loaded = False
+
+# Callback functions for preset loading
+def load_preset_callback():
+    """Load selected preset into composition"""
+    selected = st.session_state.get('preset_selector', 'Custom')
+    if selected != 'Custom':
+        # Clear all first
+        for name in COMPONENTS.keys():
+            st.session_state.composition[name] = 0.0
+        # Load preset
+        for name, value in PRESETS[selected].items():
+            st.session_state.composition[name] = value
+
+def clear_all_callback():
+    """Clear all composition values"""
+    for name in COMPONENTS.keys():
+        st.session_state.composition[name] = 0.0
 
 def calculate_properties(comp_percent):
     """Calculate all gas properties from composition"""
@@ -235,20 +250,15 @@ with tabs[0]:
         )
     
     with col_b:
-        if st.button("Load", key="load_preset_btn", disabled=(selected_preset == "Custom")):
-            # Clear everything first
-            st.session_state.composition = {name: 0.0 for name in COMPONENTS.keys()}
-            # Load preset values
-            for name, value in PRESETS[selected_preset].items():
-                st.session_state.composition[name] = value
-            st.session_state.preset_loaded = True
-            st.rerun()
+        st.button(
+            "Load", 
+            key="load_preset_btn", 
+            disabled=(selected_preset == "Custom"),
+            on_click=load_preset_callback
+        )
     
     with col_c:
-        if st.button("Clear", key="clear_all_btn"):
-            st.session_state.composition = {name: 0.0 for name in COMPONENTS.keys()}
-            st.session_state.preset_loaded = False
-            st.rerun()
+        st.button("Clear", key="clear_all_btn", on_click=clear_all_callback)
     
     st.markdown("**Enter mol% for each component:**")
     
