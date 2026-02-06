@@ -35,21 +35,35 @@ st.set_page_config(
 )
 
 # CSS Styling
-st.markdown("""
-<style>
-    .main {background-color: #f8f9fa;}
-    .stButton button {
-        background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%);
-        color: white;
-        font-weight: bold;
-        border-radius: 8px;
-        padding: 0.5rem 2rem;
-        border: none;
-    }
-    h1 {color: #1e3a8a;}
-    h2 {color: #3b82f6;}
-</style>
-""", unsafe_allow_html=True)
+st.markdown("### Gas Composition")
+
+# Use vertical_alignment to keep buttons and dropdown level
+col_a, col_b, col_c = st.columns([3, 1, 1], vertical_alignment="bottom")
+
+with col_a:
+    # Adding a clear label for the dropdown
+    selected_preset = st.selectbox(
+        "Load Preset Configuration", 
+        ["Custom"] + list(PRESETS.keys()),
+        key="preset_selector"
+    )
+
+with col_b:
+    st.button(
+        "Load", 
+        key="load_preset_btn", 
+        disabled=(selected_preset == "Custom"),
+        on_click=load_preset_callback,
+        use_container_width=True
+    )
+
+with col_c:
+    st.button(
+        "Clear", 
+        key="clear_all_btn", 
+        on_click=clear_all_callback,
+        use_container_width=True
+    )
 
 # Component data
 @dataclass
