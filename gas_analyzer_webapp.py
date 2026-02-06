@@ -116,26 +116,20 @@ if 'limits' not in st.session_state:
 def load_preset_callback():
     """Load selected preset into composition widgets directly"""
     selected = st.session_state.get('preset_selector', 'Custom')
-    
     if selected != 'Custom':
-        # Loop through all known components
         for name in COMPONENTS.keys():
-            # Get the value from the preset, or 0.0 if not in preset
-            new_value = float(PRESETS[selected].get(name, 0.0))
-            
-            # 1. Update the widget's internal state key (Critical step!)
-            st.session_state[f"inp_{name}"] = new_value
-            
-            # 2. Keep your composition dictionary in sync
-            st.session_state.composition[name] = new_value
+            # Update the specific widget key (this fixes the "nothing happens" issue)
+            st.session_state[f"inp_{name}"] = float(PRESETS[selected].get(name, 0.0))
+            # Sync the composition dict just in case
+            st.session_state.composition[name] = st.session_state[f"inp_{name}"]
 
 def clear_all_callback():
     """Clear all composition widgets"""
     for name in COMPONENTS.keys():
-        # Update widget key
         st.session_state[f"inp_{name}"] = 0.0
-        # Update composition dict
         st.session_state.composition[name] = 0.0
+    # Optional: Reset the dropdown
+    st.session_state.preset_selector = "Custom"
 
 def calculate_properties(comp_percent):
     """Calculate all gas properties from composition"""
