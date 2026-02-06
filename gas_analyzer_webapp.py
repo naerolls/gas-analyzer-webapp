@@ -102,15 +102,17 @@ DEFAULT_LIMITS = {
     'h2s': {'min': 0, 'max': 5, 'name': 'H2S Content'},
 }
 
-# Session state
+# Session state - Initialize all components to 0
 if 'composition' not in st.session_state:
-    st.session_state.composition = {}
+    st.session_state.composition = {name: 0.0 for name in COMPONENTS.keys()}
 if 'results' not in st.session_state:
     st.session_state.results = {}
 if 'use_si' not in st.session_state:
     st.session_state.use_si = True
 if 'limits' not in st.session_state:
     st.session_state.limits = DEFAULT_LIMITS.copy()
+if 'preset_loaded' not in st.session_state:
+    st.session_state.preset_loaded = False
 
 def calculate_properties(comp_percent):
     """Calculate all gas properties from composition"""
@@ -222,19 +224,31 @@ with tabs[0]:
     
     st.markdown("### Gas Composition")
     
-    col_preset1, col_preset2 = st.columns([3, 1])
-    with col_preset1:
-        preset = st.selectbox("Load Preset", ["Custom"] + list(PRESETS.keys()), key="preset_select")
-    with col_preset2:
-        if st.button("Load", disabled=(preset == "Custom")):
-            for name in COMPONENTS.keys():
-                st.session_state.composition[name] = PRESETS[preset].get(name, 0.0)
+    # Preset selector and buttons
+    col_a, col_b, col_c = st.columns([3, 1, 1])
+    
+    with col_a:
+        selected_preset = st.selectbox(
+            "Load Preset", 
+            ["Custom"] + list(PRESETS.keys()),
+            key="preset_selector"
+        )
+    
+    with col_b:
+        if st.button("Load", key="load_preset_btn", disabled=(selected_preset == "Custom")):
+            # Clear everything first
+            st.session_state.composition = {name: 0.0 for name in COMPONENTS.keys()}
+            # Load preset values
+            for name, value in PRESETS[selected_preset].items():
+                st.session_state.composition[name] = value
+            st.session_state.preset_loaded = True
             st.rerun()
     
-    if st.button("Clear All", key="clear_btn"):
-        for name in COMPONENTS.keys():
-            st.session_state.composition[name] = 0.0
-        st.rerun()
+    with col_c:
+        if st.button("Clear", key="clear_all_btn"):
+            st.session_state.composition = {name: 0.0 for name in COMPONENTS.keys()}
+            st.session_state.preset_loaded = False
+            st.rerun()
     
     st.markdown("**Enter mol% for each component:**")
     
