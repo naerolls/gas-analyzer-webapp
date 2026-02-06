@@ -240,27 +240,34 @@ with tabs[0]:
         analyst = st.text_input("Analyst")
     
     st.markdown("### Gas Composition")
-    
-    # Preset selector and buttons
-    col_a, col_b, col_c = st.columns([3, 1, 1])
-    
-    with col_a:
-        selected_preset = st.selectbox(
-            "Load Preset", 
-            ["Custom"] + list(PRESETS.keys()),
-            key="preset_selector"
-        )
-    
-    with col_b:
-        st.button(
-            "Load", 
-            key="load_preset_btn", 
-            disabled=(selected_preset == "Custom"),
-            on_click=load_preset_callback
-        )
-    
-    with col_c:
-        st.button("Clear", key="clear_all_btn", on_click=clear_all_callback)
+   st.markdown("### Gas Composition")
+
+# Aligning buttons to the bottom of the row so they level with the dropdown
+col_a, col_b, col_c = st.columns([3, 1, 1], vertical_alignment="bottom")
+
+with col_a:
+    selected_preset = st.selectbox(
+        "Load Preset", 
+        ["Custom"] + list(PRESETS.keys()),
+        key="preset_selector"
+    )
+
+with col_b:
+    st.button(
+        "Load", 
+        key="load_preset_btn", 
+        disabled=(selected_preset == "Custom"),
+        on_click=load_preset_callback,
+        use_container_width=True
+    )
+
+with col_c:
+    st.button(
+        "Clear", 
+        key="clear_all_btn", 
+        on_click=clear_all_callback,
+        use_container_width=True
+    )
     
     st.markdown("**Enter mol% for each component:**")
     
