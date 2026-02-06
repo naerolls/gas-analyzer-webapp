@@ -112,21 +112,29 @@ if 'use_si' not in st.session_state:
 if 'limits' not in st.session_state:
     st.session_state.limits = DEFAULT_LIMITS.copy()
 
-# Callback functions for preset loading
+# Updated Callback functions
 def load_preset_callback():
-    """Load selected preset into composition"""
+    """Load selected preset into composition widgets directly"""
     selected = st.session_state.get('preset_selector', 'Custom')
+    
     if selected != 'Custom':
-        # Clear all first
+        # Loop through all known components
         for name in COMPONENTS.keys():
-            st.session_state.composition[name] = 0.0
-        # Load preset
-        for name, value in PRESETS[selected].items():
-            st.session_state.composition[name] = value
+            # Get the value from the preset, or 0.0 if not in preset
+            new_value = float(PRESETS[selected].get(name, 0.0))
+            
+            # 1. Update the widget's internal state key (Critical step!)
+            st.session_state[f"inp_{name}"] = new_value
+            
+            # 2. Keep your composition dictionary in sync
+            st.session_state.composition[name] = new_value
 
 def clear_all_callback():
-    """Clear all composition values"""
+    """Clear all composition widgets"""
     for name in COMPONENTS.keys():
+        # Update widget key
+        st.session_state[f"inp_{name}"] = 0.0
+        # Update composition dict
         st.session_state.composition[name] = 0.0
 
 def calculate_properties(comp_percent):
