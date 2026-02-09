@@ -102,7 +102,7 @@ DEFAULT_LIMITS = {
     'h2s': {'min': 0, 'max': 5, 'name': 'H2S Content'},
 }
 
-# Session state - Initialize all components to 0
+# Session state
 if 'composition' not in st.session_state:
     st.session_state.composition = {name: 0.0 for name in COMPONENTS.keys()}
 if 'results' not in st.session_state:
@@ -111,8 +111,6 @@ if 'use_si' not in st.session_state:
     st.session_state.use_si = True
 if 'limits' not in st.session_state:
     st.session_state.limits = DEFAULT_LIMITS.copy()
-if 'last_preset' not in st.session_state:
-    st.session_state['last_preset'] = "Custom"
 
 # Callback functions for preset loading
 def load_preset_callback():
@@ -240,50 +238,6 @@ with tabs[0]:
         analyst = st.text_input("Analyst")
     
     st.markdown("### Gas Composition")
-    
-    # Simple approach - just use buttons for each preset
-    st.markdown("**Quick Load:**")
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        if st.button("Pipeline Gas", use_container_width=True):
-            st.session_state.composition = {
-                'Methane': 95.0, 'Ethane': 2.5, 'Propane': 0.5,
-                'n-Butane': 0.2, 'Carbon Dioxide': 1.0, 'Nitrogen': 0.8,
-                'i-Butane': 0.0, 'n-Pentane': 0.0, 'i-Pentane': 0.0,
-                'n-Hexane': 0.0, 'Heptane': 0.0, 'Hydrogen': 0.0,
-                'Carbon Monoxide': 0.0, 'Hydrogen Sulfide': 0.0
-            }
-            st.rerun()
-    
-    with col2:
-        if st.button("Rich Gas", use_container_width=True):
-            st.session_state.composition = {
-                'Methane': 85.0, 'Ethane': 8.0, 'Propane': 4.0,
-                'n-Butane': 1.5, 'Carbon Dioxide': 0.5, 'Nitrogen': 1.0,
-                'i-Butane': 0.0, 'n-Pentane': 0.0, 'i-Pentane': 0.0,
-                'n-Hexane': 0.0, 'Heptane': 0.0, 'Hydrogen': 0.0,
-                'Carbon Monoxide': 0.0, 'Hydrogen Sulfide': 0.0
-            }
-            st.rerun()
-    
-    with col3:
-        if st.button("Lean Gas", use_container_width=True):
-            st.session_state.composition = {
-                'Methane': 98.0, 'Ethane': 0.5, 'Carbon Dioxide': 1.0,
-                'Nitrogen': 0.5, 'Propane': 0.0, 'n-Butane': 0.0,
-                'i-Butane': 0.0, 'n-Pentane': 0.0, 'i-Pentane': 0.0,
-                'n-Hexane': 0.0, 'Heptane': 0.0, 'Hydrogen': 0.0,
-                'Carbon Monoxide': 0.0, 'Hydrogen Sulfide': 0.0
-            }
-            st.rerun()
-    
-    with col4:
-        if st.button("Clear All", use_container_width=True):
-            st.session_state.composition = {name: 0.0 for name in COMPONENTS.keys()}
-            st.rerun()
-    
-    st.markdown("---")
     st.markdown("**Enter mol% for each component:**")
     
     col1, col2 = st.columns(2)
