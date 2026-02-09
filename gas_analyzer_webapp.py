@@ -112,24 +112,22 @@ if 'use_si' not in st.session_state:
 if 'limits' not in st.session_state:
     st.session_state.limits = DEFAULT_LIMITS.copy()
 
-# Updated Callback functions
+# Callback functions for preset loading
 def load_preset_callback():
-    """Load selected preset into composition widgets directly"""
+    """Load selected preset into composition"""
     selected = st.session_state.get('preset_selector', 'Custom')
     if selected != 'Custom':
+        # Clear all first
         for name in COMPONENTS.keys():
-            # Update the specific widget key (this fixes the "nothing happens" issue)
-            st.session_state[f"inp_{name}"] = float(PRESETS[selected].get(name, 0.0))
-            # Sync the composition dict just in case
-            st.session_state.composition[name] = st.session_state[f"inp_{name}"]
+            st.session_state.composition[name] = 0.0
+        # Load preset
+        for name, value in PRESETS[selected].items():
+            st.session_state.composition[name] = value
 
 def clear_all_callback():
-    """Clear all composition widgets"""
+    """Clear all composition values"""
     for name in COMPONENTS.keys():
-        st.session_state[f"inp_{name}"] = 0.0
         st.session_state.composition[name] = 0.0
-    # Optional: Reset the dropdown
-    st.session_state.preset_selector = "Custom"
 
 def calculate_properties(comp_percent):
     """Calculate all gas properties from composition"""
@@ -272,29 +270,33 @@ with tabs[0]:
     
     with col1:
         for name, comp in components_list[:mid]:
-            default = st.session_state.composition.get(name, 0.0)
+            # Get value from session state composition
             comp_input[name] = st.number_input(
                 f"{name} ({comp.formula})",
                 min_value=0.0,
                 max_value=100.0,
-                value=float(default),
+                value=float(st.session_state.composition.get(name, 0.0)),
                 step=0.1,
                 format="%.2f",
                 key=f"inp_{name}"
             )
+            # Update session state as user types
+            st.session_state.composition[name] = comp_input[name]
     
     with col2:
         for name, comp in components_list[mid:]:
-            default = st.session_state.composition.get(name, 0.0)
+            # Get value from session state composition
             comp_input[name] = st.number_input(
                 f"{name} ({comp.formula})",
                 min_value=0.0,
                 max_value=100.0,
-                value=float(default),
+                value=float(st.session_state.composition.get(name, 0.0)),
                 step=0.1,
                 format="%.2f",
                 key=f"inp_{name}"
             )
+            # Update session state as user types
+            st.session_state.composition[name] = comp_input[name]
     
     total = sum(comp_input.values())
     if abs(total - 100) < 0.1:
