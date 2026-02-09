@@ -111,6 +111,8 @@ if 'use_si' not in st.session_state:
     st.session_state.use_si = True
 if 'limits' not in st.session_state:
     st.session_state.limits = DEFAULT_LIMITS.copy()
+if 'last_preset' not in st.session_state:
+    st.session_state['last_preset'] = "Custom"
 
 # Callback functions for preset loading
 def load_preset_callback():
@@ -239,26 +241,29 @@ with tabs[0]:
     
     st.markdown("### Gas Composition")
     
-    # Preset selector and buttons
-    col_a, col_b, col_c = st.columns([3, 1, 1])
+    # Preset selector with immediate action
+    selected_preset = st.selectbox(
+        "Load Preset", 
+        ["Custom"] + list(PRESETS.keys()),
+        key="preset_selector"
+    )
     
-    with col_a:
-        selected_preset = st.selectbox(
-            "Load Preset", 
-            ["Custom"] + list(PRESETS.keys()),
-            key="preset_selector"
-        )
+    # Detect when preset changes and load immediately
+    if selected_preset != "Custom":
+        if st.session_state.get('last_preset') != selected_preset:
+            # Load the preset
+            for name in COMPONENTS.keys():
+                st.session_state.composition[name] = float(PRESETS[selected_preset].get(name, 0.0))
+            st.session_state['last_preset'] = selected_preset
+            st.rerun()
     
-    with col_b:
-        st.button(
-            "Load", 
-            key="load_preset_btn", 
-            disabled=(selected_preset == "Custom"),
-            on_click=load_preset_callback
-        )
-    
-    with col_c:
-        st.button("Clear", key="clear_all_btn", on_click=clear_all_callback)
+    col_clear = st.columns([1, 3])[0]
+    with col_clear:
+        if st.button("Clear All", use_container_width=True):
+            for name in COMPONENTS.keys():
+                st.session_state.composition[name] = 0.0
+            st.session_state['last_preset'] = "Custom"
+            st.rerun()
     
     st.markdown("**Enter mol% for each component:**")
     
