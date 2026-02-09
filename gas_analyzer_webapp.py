@@ -22,10 +22,22 @@ except:
 # Excel export (optional)
 try:
     from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     EXCEL_OK = True
 except:
     EXCEL_OK = False
+
+# PDF export (optional)
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    PDF_OK = True
+except:
+    PDF_OK = False
 
 # Page setup
 st.set_page_config(
@@ -190,12 +202,138 @@ def calculate_properties(comp_percent):
         'afr': afr, 'aft_c': aft_c, 'aft_f': aft_f, 'lel': lel, 'fsi': fsi
     }
 
-def check_status(key, value, limits):
-    """Check if value is within limits"""
-    if key not in limits:
-        return '-'
-    lim = limits[key]
-    return 'OK' if lim['min'] <= value <= lim['max'] else 'FAIL'
+def generate_pdf_report(project, source, analyst, comp_input, results, limits, use_si):
+    """Generate branded PDF report"""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#1e3a8a'),
+        spaceAfter=30,
+        alignment=TA_CENTER
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.HexColor('#3b82f6'),
+        spaceAfter=12,
+        spaceBefore=12
+    )
+    
+    # Title
+    elements.append(Paragraph("GAS TURBINE FUEL QUALITY ANALYSIS", title_style))
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Project info
+    info_data = [
+        ['Project:', project, 'Date:', datetime.now().strftime('%Y-%m-%d')],
+        ['Source:', source, 'Analyst:', analyst],
+        ['Units:', 'SI (Metric)' if use_si else 'US (Imperial)', '', '']
+    ]
+    info_table = Table(info_data, colWidths=[1*inch, 2*inch, 1*inch, 1.5*inch])
+    info_table.setStyle(TableStyle([
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+        ('TEXTCOLOR', (0,0), (0,-1), colors.HexColor('#1e3a8a')),
+        ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Overall status
+    r = results
+    si = use_si
+    lims = limits
+    
+    checks = [
+        ('wobbe_lower', 'wi_l_si'), ('lhv_vol', 'lhv_v_si'), ('sg', 'sg'),
+        ('mn', 'mn'), ('h2', 'h2'), ('co2_n2', 'co2_n2')
+    ]
+    
+    statuses = [check_status(k, r[rk], lims) for k, rk in checks if k in lims]
+    overall = "NOT SUITABLE" if 'FAIL' in statuses else "SUITABLE FOR TURBINE USE"
+    overall_color = colors.red if 'FAIL' in statuses else colors.green
+    
+    overall_para = Paragraph(f"<b>OVERALL STATUS: {overall}</b>", 
+                            ParagraphStyle('overall', fontSize=16, textColor=overall_color, alignment=TA_CENTER))
+    elements.append(overall_para)
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Gas Composition
+    elements.append(Paragraph("GAS COMPOSITION", heading_style))
+    comp_data = [['Component', 'Formula', 'Mol%']]
+    sorted_comp = sorted(r['composition'].items(), key=lambda x: x[1], reverse=True)
+    for name, frac in sorted_comp:
+        comp_data.append([name, COMPONENTS[name].formula, f"{frac*100:.2f}%"])
+    
+    comp_table = Table(comp_data, colWidths=[2.5*inch, 1.5*inch, 1.5*inch])
+    comp_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#3b82f6')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 11),
+        ('BOTTOMPADDING', (0,0), (-1,0), 12),
+        ('BACKGROUND', (0,1), (-1,-1), colors.beige),
+        ('GRID', (0,0), (-1,-1), 1, colors.black)
+    ]))
+    elements.append(comp_table)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Key Properties
+    elements.append(Paragraph("CALCULATED PROPERTIES", heading_style))
+    props_data = [['Property', 'Value', 'Unit', 'Status']]
+    
+    for lim_key, res_key in checks:
+        if lim_key in lims:
+            lim = lims[lim_key]
+            
+            if lim_key == 'wobbe_lower':
+                val = r['wi_l_si'] if si else r['wi_l_us']
+                unit = 'MJ/m3' if si else 'Btu/scf'
+            elif lim_key == 'lhv_vol':
+                val = r['lhv_v_si'] if si else r['lhv_v_us']
+                unit = 'MJ/m3' if si else 'Btu/scf'
+            else:
+                val = r[res_key]
+                unit = 'mol%' if lim_key in ['h2', 'co2_n2'] else ('-' if lim_key in ['sg', 'mn'] else 'ppmv')
+            
+            status = check_status(lim_key, r[res_key] if lim_key not in ['wobbe_lower', 'lhv_vol'] else r[res_key], lims)
+            props_data.append([lim['name'], f"{val:.2f}", unit, status])
+    
+    props_table = Table(props_data, colWidths=[2*inch, 1.5*inch, 1.5*inch, 1*inch])
+    props_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#3b82f6')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 11),
+        ('BACKGROUND', (0,1), (-1,-1), colors.beige),
+        ('GRID', (0,0), (-1,-1), 1, colors.black)
+    ]))
+    elements.append(props_table)
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Footer/Disclaimer
+    disclaimer = Paragraph(
+        "<i>This report is for informational purposes only. Consult turbine OEM specifications for final approval.</i>",
+        ParagraphStyle('disclaimer', fontSize=8, textColor=colors.grey)
+    )
+    elements.append(Spacer(1, 0.3*inch))
+    elements.append(disclaimer)
+    
+    # Build PDF
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
 
 # SIDEBAR
 with st.sidebar:
@@ -422,13 +560,33 @@ with tabs[2]:
         for lim_key, res_key in checks:
             if lim_key in lims:
                 lim = lims[lim_key]
-                val = r[res_key]
-                status = check_status(lim_key, val, lims)
+                
+                # Get value with proper unit conversion
+                if lim_key == 'wobbe_lower':
+                    val = r['wi_l_si'] if si else r['wi_l_us']
+                    check_val = r['wi_l_si']
+                    unit = 'MJ/m3' if si else 'Btu/scf'
+                    range_min = lim['min'] if si else lim['min'] * 26.839
+                    range_max = lim['max'] if si else lim['max'] * 26.839
+                elif lim_key == 'lhv_vol':
+                    val = r['lhv_v_si'] if si else r['lhv_v_us']
+                    check_val = r['lhv_v_si']
+                    unit = 'MJ/m3' if si else 'Btu/scf'
+                    range_min = lim['min'] if si else lim['min'] * 26.839
+                    range_max = lim['max'] if si else lim['max'] * 26.839
+                else:
+                    val = r[res_key]
+                    check_val = val
+                    unit = 'mol%' if lim_key in ['h2', 'co2_n2'] else ('-' if lim_key in ['sg', 'mn'] else 'ppmv')
+                    range_min = lim['min']
+                    range_max = lim['max']
+                
+                status = check_status(lim_key, check_val, lims)
                 
                 status_data.append({
                     'Property': lim['name'],
-                    'Value': f"{val:.2f}",
-                    'Range': f"{lim['min']}-{lim['max']}",
+                    'Value': f"{val:.2f} {unit}",
+                    'Range': f"{range_min:.0f}-{range_max:.0f} {unit}",
                     'Status': status
                 })
         
@@ -437,6 +595,80 @@ with tabs[2]:
             use_container_width=True,
             hide_index=True
         )
+        
+        # Report Generation
+        st.markdown("---")
+        st.subheader("📄 Generate Report")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if PDF_OK:
+                if st.button("📄 Download PDF Report", use_container_width=True, type="primary"):
+                    pdf_buffer = generate_pdf_report(
+                        project, source, analyst, comp_input, r, lims, si
+                    )
+                    st.download_button(
+                        "💾 Download PDF",
+                        pdf_buffer,
+                        f"gas_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                        "application/pdf",
+                        use_container_width=True
+                    )
+            else:
+                st.info("Install reportlab for PDF: pip install reportlab")
+        
+        with col2:
+            if EXCEL_OK:
+                if st.button("📊 Download Excel Report", use_container_width=True):
+                    # Enhanced Excel with branding
+                    output = io.BytesIO()
+                    wb = Workbook()
+                    ws = wb.active
+                    ws.title = "Gas Analysis"
+                    
+                    # Header
+                    ws['A1'] = "GAS TURBINE FUEL QUALITY ANALYSIS"
+                    ws['A1'].font = Font(bold=True, size=16, color="1E3A8A")
+                    ws.merge_cells('A1:D1')
+                    ws['A1'].alignment = Alignment(horizontal='center')
+                    
+                    # Project info
+                    ws['A3'] = "Project:"
+                    ws['B3'] = project
+                    ws['C3'] = "Date:"
+                    ws['D3'] = datetime.now().strftime('%Y-%m-%d')
+                    ws['A4'] = "Source:"
+                    ws['B4'] = source
+                    ws['C4'] = "Analyst:"
+                    ws['D4'] = analyst
+                    
+                    # Composition
+                    ws['A6'] = "GAS COMPOSITION"
+                    ws['A6'].font = Font(bold=True, size=12)
+                    ws['A7'] = "Component"
+                    ws['B7'] = "Mol%"
+                    
+                    for cell in ['A7', 'B7']:
+                        ws[cell].font = Font(bold=True)
+                        ws[cell].fill = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid")
+                    
+                    row = 8
+                    for name, frac in sorted(r['composition'].items(), key=lambda x: x[1], reverse=True):
+                        ws[f'A{row}'] = name
+                        ws[f'B{row}'] = f"{frac*100:.2f}%"
+                        row += 1
+                    
+                    wb.save(output)
+                    output.seek(0)
+                    
+                    st.download_button(
+                        "💾 Download Excel",
+                        output,
+                        f"gas_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
 
 # TAB 4: SETTINGS
 with tabs[3]:
