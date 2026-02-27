@@ -133,52 +133,70 @@ def clear_all_callback():
         st.session_state.composition[name] = 0.0
 
 def calculate_properties(comp_percent):
-    # 1. Normalize composition to 1.0 (Decimal)
+    # 1. Normalize
     total_raw = sum(comp_percent.values())
+    if total_raw == 0: return None
     comp = {k: (v / total_raw) for k, v in comp_percent.items() if v > 0}
     
-    # 2. Molecular Weight (Sum of Mol fraction * Component MW)
-    # Equation: $MW_{mix} = \sum (x_i \cdot MW_i)$
+    # 2. Molecular Weight
     mw_mix = sum(comp[n] * COMPONENTS[n].mw for n in comp)
-    
-    # 3. Relative Density (Specific Gravity)
-    # Equation: $d = \frac{MW_{mix}}{MW_{air}}$
     sg = mw_mix / MW_AIR
     
-    # 4. Ideal Density at 15°C (kg/m3)
-    # Equation: $\rho = \frac{MW_{mix}}{V_m}$
-    density_15c = mw_mix / MOLAR_VOLUME_15C
+    # 3. SI Calculations (Reference 15°C)
+    dens_si = mw_mix / MOLAR_VOLUME_15C
+    lhv_m_si = sum((comp[n] * COMPONENTS[n].mw / mw_mix) * COMPONENTS[n].lhv_mass for n in comp)
+    hhv_m_si = sum((comp[n] * COMPONENTS[n].mw / mw_mix) * COMPONENTS[n].hhv_mass for n in comp)
     
-    # 5. Heating Values (Mass Basis)
-    # Calculated as mass-weighted average
-    lhv_mass_mix = sum((comp[n] * COMPONENTS[n].mw / mw_mix) * COMPONENTS[n].lhv_mass for n in comp)
-    hhv_mass_mix = sum((comp[n] * COMPONENTS[n].mw / mw_mix) * COMPONENTS[n].hhv_mass for n in comp)
+    lhv_v_si = lhv_m_si * dens_si
+    hhv_v_si = hhv_m_si * dens_si
     
-    # 6. Heating Values (Volumetric Basis @ 15°C)
-    # Equation: $H_v = H_m \cdot \rho$
-    lhv_vol_15c = lhv_mass_mix * density_15c
-    hhv_vol_15c = hhv_mass_mix * density_15c
+    wi_l_si = lhv_v_si / math.sqrt(sg)
+    wi_h_si = hhv_v_si / math.sqrt(sg)
     
-    # 7. Wobbe Index (Lower)
-    # Equation: $W = \frac{H_v}{\sqrt{d}}$
-    wobbe_lower = lhv_vol_15c / math.sqrt(sg)
+    # 4. US Customary Conversions
+    # Constants: 1 kg/m3 = 0.062428 lb/ft3 | 1 MJ/m3 = 26.839 Btu/scf | 1 MJ/kg = 429.92 Btu/lb
+    dens_us = dens_si * 0.062428
+    lhv_m_us = lhv_m_si * 429.92
+    hhv_m_us = hhv_m_si * 429.92
+    lhv_v_us = lhv_v_si * 26.839
+    hhv_v_us = hhv_v_si * 26.839
+    wi_l_us = wi_l_si * 26.839
+    wi_h_us = wi_h_si * 26.839
+
+    # 5. Component Specifics
+    h2_val = comp.get('Hydrogen', 0) * 100
+    co2_n2_val = (comp.get('Carbon Dioxide', 0) + comp.get('Nitrogen', 0)) * 100
+    h2s_val = comp.get('H2S', 0) * 1000000 # Convert to ppmv
     
-    # 8. Stoichiometric Air-Fuel Ratio (AFR)
-    # O2 required (moles O2 per mole of fuel mix)
-    o2_required = sum(comp[n] * COMPONENTS[n].o2_stoic for n in comp)
+    # 6. Methane Number (Simplified Linear Approximation)
+    # Professional MN requires complex algorithms, this is a placeholder to prevent crashes
+    mn_val = (comp.get('Methane', 0) * 100) + (comp.get('Nitrogen', 0) * 100) - (comp.get('Ethane', 0) * 10)
     
-    # Air is ~20.95% Oxygen by volume
-    # AFR (mass basis) = (moles O2 / 0.2095) * MW_Air / MW_Fuel
-    afr_mass = (o2_required / 0.20947) * (MW_AIR / mw_mix)
+    # 7. Stoichiometric Air-Fuel Ratio
+    o2_req = sum(comp[n] * COMPONENTS[n].o2_stoic for n in comp)
+    afr_mass = (o2_req / 0.20947) * (MW_AIR / mw_mix)
+    
+    # 8. Adiabatic Flame Temp (Linear Approximation based on LHV)
+    aft_c = 1500 + (lhv_v_si * 15) # Placeholder logic
+    aft_f = (aft_c * 9/5) + 32
 
     return {
         "composition": comp,
         "mw": mw_mix,
         "sg": sg,
-        "density": density_15c,
-        "lhv_vol": lhv_vol_15c,
-        "wobbe": wobbe_lower,
-        "afr": afr_mass
+        "dens_si": dens_si, "dens_us": dens_us,
+        "lhv_m_si": lhv_m_si, "lhv_m_us": lhv_m_us,
+        "lhv_v_si": lhv_v_si, "lhv_v_us": lhv_v_us,
+        "hhv_m_si": hhv_m_si, "hhv_m_us": hhv_m_us,
+        "hhv_v_si": hhv_v_si, "hhv_v_us": hhv_v_us,
+        "wi_l_si": wi_l_si, "wi_l_us": wi_l_us,
+        "wi_h_si": wi_h_si, "wi_h_us": wi_h_us,
+        "h2": h2_val,
+        "co2_n2": co2_n2_val,
+        "h2s": h2s_val,
+        "mn": max(0, min(100, mn_val)),
+        "afr": afr_mass,
+        "aft_c": aft_c, "aft_f": aft_f
     }
 
 def check_status(key, value, limits):
@@ -273,14 +291,13 @@ with tabs[0]:
     elif total > 0:
         st.warning(f"Total: {total:.2f}% (Should be 100%)")
     
-    if st.button("CALCULATE PROPERTIES", type="primary", use_container_width=True):
-        results = calculate_properties(comp_input)
-        if results:
-            st.session_state.results = results
-            st.session_state.composition = comp_input
-            st.success("Calculation complete! Check Results tab.")
-        else:
-            st.error("Invalid composition")
+   if st.button("CALCULATE PROPERTIES", type="primary", use_container_width=True):
+    # Pass the actual values collected in the loop
+    results = calculate_properties(st.session_state.composition) 
+    if results:
+        st.session_state.results = results
+        st.success("Calculation complete!")
+        st.rerun() # Forces the UI to refresh and show Tab 2 results
 
 # TAB 2: RESULTS
 with tabs[1]:
