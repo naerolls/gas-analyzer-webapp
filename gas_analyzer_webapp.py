@@ -57,25 +57,28 @@ class Component:
     name: str
     formula: str
     mw: float
-    lhv: float
-    hhv: float
+    lhv_mass: float # MJ/kg (ISO 6976 @ 15°C)
+    hhv_mass: float # MJ/kg (ISO 6976 @ 15°C)
+    o2_stoic: float # Moles of O2 per mole of fuel
 
+# ISO 6976 / GPA 2145 constants
+# Note: LHV/HHV values are rounded for example; use your specific standard's table values
 COMPONENTS = {
-    'Methane': Component('Methane', 'CH4', 16.043, 50.01, 55.50),
-    'Ethane': Component('Ethane', 'C2H6', 30.070, 47.49, 51.88),
-    'Propane': Component('Propane', 'C3H8', 44.097, 46.35, 50.36),
-    'n-Butane': Component('n-Butane', 'C4H10', 58.123, 45.75, 49.50),
-    'i-Butane': Component('i-Butane', 'C4H10', 58.123, 45.61, 49.36),
-    'n-Pentane': Component('n-Pentane', 'C5H12', 72.150, 45.36, 49.01),
-    'i-Pentane': Component('i-Pentane', 'C5H12', 72.150, 45.24, 48.89),
-    'n-Hexane': Component('n-Hexane', 'C6H14', 86.177, 45.10, 48.68),
-    'Heptane': Component('Heptane', 'C7H16', 100.204, 44.93, 48.45),
-    'Hydrogen': Component('Hydrogen', 'H2', 2.016, 120.00, 141.80),
-    'Carbon Monoxide': Component('Carbon Monoxide', 'CO', 28.010, 10.10, 10.10),
-    'Carbon Dioxide': Component('Carbon Dioxide', 'CO2', 44.010, 0.00, 0.00),
-    'Nitrogen': Component('Nitrogen', 'N2', 28.014, 0.00, 0.00),
-    'Hydrogen Sulfide': Component('Hydrogen Sulfide', 'H2S', 34.081, 15.20, 16.53),
+    'Methane': Component('Methane', 'CH4', 16.043, 50.009, 55.503, 2.0),
+    'Ethane':  Component('Ethane', 'C2H6', 30.070, 47.794, 51.901, 3.5),
+    'Propane': Component('Propane', 'C3H8', 44.097, 46.357, 50.366, 5.0),
+    'n-Butane': Component('n-Butane', 'C4H10', 58.123, 45.752, 49.512, 6.5),
+    'i-Butane': Component('i-Butane', 'C4H10', 58.123, 45.614, 49.375, 6.5),
+    'Hydrogen': Component('Hydrogen', 'H2', 2.016, 119.95, 141.86, 0.5),
+    'CO':       Component('Carbon Monoxide', 'CO', 28.010, 10.103, 10.103, 0.5),
+    'H2S':      Component('Hydrogen Sulfide', 'H2S', 34.081, 15.208, 16.532, 1.5),
+    'Nitrogen': Component('Nitrogen', 'N2', 28.013, 0.0, 0.0, 0.0),
+    'CO2':      Component('Carbon Dioxide', 'CO2', 44.010, 0.0, 0.0, 0.0),
 }
+
+# ISO 6976 Reference Constants
+MW_AIR = 28.9645  # Standard dry air
+MOLAR_VOLUME_15C = 23.6443 # m3/kmol (Standard molar volume at 15°C, 101.325 kPa)
 
 PRESETS = {
     'Pipeline Natural Gas': {
@@ -129,65 +132,52 @@ def clear_all_callback():
     for name in COMPONENTS.keys():
         st.session_state.composition[name] = 0.0
 
-def calculate_properties(comp_percent):
-    """Calculate all gas properties from composition"""
-    comp = {k: v/100 for k, v in comp_percent.items() if v > 0}
+def calculate_properties_iso6976(comp_percent):
+    # 1. Normalize composition to 1.0 (Decimal)
+    total_raw = sum(comp_percent.values())
+    comp = {k: (v / total_raw) for k, v in comp_percent.items() if v > 0}
     
-    if not comp:
-        return None
+    # 2. Molecular Weight (Sum of Mol fraction * Component MW)
+    # Equation: $MW_{mix} = \sum (x_i \cdot MW_i)$
+    mw_mix = sum(comp[n] * COMPONENTS[n].mw for n in comp)
     
-    total = sum(comp.values())
-    comp = {k: v/total for k, v in comp.items()}
+    # 3. Relative Density (Specific Gravity)
+    # Equation: $d = \frac{MW_{mix}}{MW_{air}}$
+    sg = mw_mix / MW_AIR
     
-    # Basic properties
-    mw = sum(comp[n] * COMPONENTS[n].mw for n in comp)
-    sg = mw / 28.97
-    dens_si = mw / 22.414
-    dens_us = mw / 379.49
+    # 4. Ideal Density at 15°C (kg/m3)
+    # Equation: $\rho = \frac{MW_{mix}}{V_m}$
+    density_15c = mw_mix / MOLAR_VOLUME_15C
     
-    # Heating values
-    lhv_m_si = sum((comp[n] * COMPONENTS[n].mw / mw) * COMPONENTS[n].lhv for n in comp)
-    hhv_m_si = sum((comp[n] * COMPONENTS[n].mw / mw) * COMPONENTS[n].hhv for n in comp)
-    lhv_v_si = lhv_m_si * dens_si
-    hhv_v_si = hhv_m_si * dens_si
+    # 5. Heating Values (Mass Basis)
+    # Calculated as mass-weighted average
+    lhv_mass_mix = sum((comp[n] * COMPONENTS[n].mw / mw_mix) * COMPONENTS[n].lhv_mass for n in comp)
+    hhv_mass_mix = sum((comp[n] * COMPONENTS[n].mw / mw_mix) * COMPONENTS[n].hhv_mass for n in comp)
     
-    # Wobbe Index
-    wi_l_si = lhv_v_si / math.sqrt(sg)
-    wi_h_si = hhv_v_si / math.sqrt(sg)
+    # 6. Heating Values (Volumetric Basis @ 15°C)
+    # Equation: $H_v = H_m \cdot \rho$
+    lhv_vol_15c = lhv_mass_mix * density_15c
+    hhv_vol_15c = hhv_mass_mix * density_15c
     
-    # Advanced properties
-    h2 = comp.get('Hydrogen', 0) * 100
-    co2_n2 = (comp.get('Carbon Dioxide', 0) + comp.get('Nitrogen', 0)) * 100
-    h2s = comp.get('Hydrogen Sulfide', 0) * 1e6
+    # 7. Wobbe Index (Lower)
+    # Equation: $W = \frac{H_v}{\sqrt{d}}$
+    wobbe_lower = lhv_vol_15c / math.sqrt(sg)
     
-    mn = (137.78 * comp.get('Methane', 0) - 
-          40 * comp.get('Ethane', 0) - 
-          79.52 * comp.get('Propane', 0) + 
-          1.5 * co2_n2/100)
+    # 8. Stoichiometric Air-Fuel Ratio (AFR)
+    # O2 required (moles O2 per mole of fuel mix)
+    o2_required = sum(comp[n] * COMPONENTS[n].o2_stoic for n in comp)
     
-    o2 = (comp.get('Methane', 0) * 2 + 
-          comp.get('Ethane', 0) * 3.5 + 
-          comp.get('Propane', 0) * 5 + 
-          comp.get('Hydrogen', 0) * 0.5)
-    afr = (o2 / 0.2095 * 28.97) / mw
-    
-    aft_c = 1900 + (lhv_v_si / 40) * 100 - (co2_n2 * 15)
-    aft_f = aft_c * 1.8 + 32
-    
-    lel = 0
-    fsi = comp.get('Methane', 0) * 1.0 + comp.get('Ethane', 0) * 0.9
-    
+    # Air is ~20.95% Oxygen by volume
+    # AFR (mass basis) = (moles O2 / 0.2095) * MW_Air / MW_Fuel
+    afr_mass = (o2_required / 0.20947) * (MW_AIR / mw_mix)
+
     return {
-        'composition': comp,
-        'mw': mw, 'sg': sg, 'dens_si': dens_si, 'dens_us': dens_us,
-        'lhv_m_si': lhv_m_si, 'lhv_v_si': lhv_v_si,
-        'lhv_m_us': lhv_m_si * 429.923, 'lhv_v_us': lhv_m_si * 429.923 * dens_us,
-        'hhv_m_si': hhv_m_si, 'hhv_v_si': hhv_v_si,
-        'hhv_m_us': hhv_m_si * 429.923, 'hhv_v_us': hhv_m_si * 429.923 * dens_us,
-        'wi_l_si': wi_l_si, 'wi_h_si': wi_h_si,
-        'wi_l_us': wi_l_si * 26.839, 'wi_h_us': wi_h_si * 26.839,
-        'h2': h2, 'co2_n2': co2_n2, 'h2s': h2s, 'mn': mn, 
-        'afr': afr, 'aft_c': aft_c, 'aft_f': aft_f, 'lel': lel, 'fsi': fsi
+        "mw": mw_mix,
+        "sg": sg,
+        "density": density_15c,
+        "lhv_vol": lhv_vol_15c,
+        "wobbe": wobbe_lower,
+        "afr": afr_mass
     }
 
 def check_status(key, value, limits):
