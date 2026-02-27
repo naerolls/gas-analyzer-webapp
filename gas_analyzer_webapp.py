@@ -132,7 +132,7 @@ def clear_all_callback():
     for name in COMPONENTS.keys():
         st.session_state.composition[name] = 0.0
 
-def calculate_properties_iso6976(comp_percent):
+def calculate_properties(comp_percent):
     # 1. Normalize composition to 1.0 (Decimal)
     total_raw = sum(comp_percent.values())
     comp = {k: (v / total_raw) for k, v in comp_percent.items() if v > 0}
