@@ -172,6 +172,7 @@ def calculate_properties(comp_percent):
     afr_mass = (o2_required / 0.20947) * (MW_AIR / mw_mix)
 
     return {
+        "composition": comp,
         "mw": mw_mix,
         "sg": sg,
         "density": density_15c,
